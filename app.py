@@ -396,3 +396,10 @@ def calculateCosineSimilarityBetweebQueryandDocuments(tfidfquerytermsdictionary 
 if __name__ == '__main__':
    application.run()
 
+'''
+Refernces:
+1. https://janav.wordpress.com/2013/10/27/tf-idf-and-cosine-similarity/
+2. https://pythonprogramming.net/lemmatizing-nltk-tutorial/
+3. https://docs.python.org/2/library/pickle.html
+4. https://www.analyticsvidhya.com/blog/2018/02/natural-language-processing-for-beginners-using-textblob/
+'''
