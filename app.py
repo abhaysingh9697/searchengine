@@ -351,13 +351,10 @@ def calculateCosineSimilarityBetweebQueryandDocuments(tfidfquerytermsdictionary 
             break
         document = documentindexedtfidfscoreofcorpus[docindex]
 
-
         for queryterms in tfidfquerytermsdictionary.keys():
 
             if queryterms in document:
                 cosineList.append([tfidfquerytermsdictionary[queryterms],document[queryterms]])
-
-
             else:
                 cosineList.append([tfidfquerytermsdictionary[queryterms], 0])
                 count = count +1
@@ -381,7 +378,6 @@ def calculateCosineSimilarityBetweebQueryandDocuments(tfidfquerytermsdictionary 
                 cosineFactor = num / totalmag
                 cosineresultdictionary.update({docindex: cosineFactor})
 
-
         docindex = docindex + 1
         cosineList.clear()
         count=0
@@ -390,16 +386,11 @@ def calculateCosineSimilarityBetweebQueryandDocuments(tfidfquerytermsdictionary 
     list=[]
     returnresultcount = 0
     for k,v in result:
-
            r = textual_reviews[k]
-
-           # read from textual_reviews
-
            list.append(r)
            returnresultcount = returnresultcount+1
            if returnresultcount == 10:
             break
-    end = time.time()
     return list
 
 if __name__ == '__main__':
