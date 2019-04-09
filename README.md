@@ -8,4 +8,4 @@ Steps to install and execute the application:
 5. Click on the local host link seen in the IDE and enter the search query in the launched html page.
 6. Most top 10 matched searched results is seen as reponse.
 
-Note: Currently this application is hosted on heroku cloud platform under free tier service.
+Note: Currently this application is hosted on heroku cloud platform under free  tier service.
