@@ -1,52 +1,49 @@
 #
 # Author: Abhay Singh
+# DataMining : Project Phase 1
+# UTA ID : 1********9
+# Application written in python for performing text search based on tf-idf concept.
 #
-# This is a an application written in python for performing text search based on tf-idf concepts and cosine similarity.
-#
-#
-#
+
 
 import re
 import os
 import time
 import math
 import csv
-import nltk
 from nltk.corpus import stopwords
 from textblob import TextBlob
 from nltk.stem import PorterStemmer
 from collections import defaultdict
 from flask import Flask , render_template,request
+import pickle
 
 
 idfdictionary_global = {}
 tfidfquerytermsdictionary_global = {}
 documentindexedtfidfscoreofcorpus_global = {}
+textual_reviews = {}
 idfdictionary_global = {}
 textual_reviews = {}
 documentCount = 0
 porter = PorterStemmer()
 
 
-app= Flask(__name__)
+application = Flask(__name__)
 
 '''
     Description : Function storingreviewsindictionary reads the csv file line by line and updates the dictionary
                   with line number as key and value as description of the reviews. This gives the application
                   flexibility to use the in memory object rather then referring to csv file again and again
+                  Dictionary object is serialised and stored in textual_reviews.pickle. Later on subsequent
+                  request this file will be referred for loading back dictionary object
     Input       : None
     Output      : textual_reviews. This is a dictionary data-structure and it stores document index as the key and
                   text reviews as the value. This dictionary is kept global so that it can be accessed throughout the
                   application.
-    
-        
 '''
-
-
 def storingreviewsindictionary():
     global textual_reviews
-    start = time.time()
-    dictionary = {}
     count = 0
     with open('amazon.csv', encoding="utf8") as csvFile:
         reader = csv.reader(csvFile)
@@ -54,8 +51,12 @@ def storingreviewsindictionary():
         for row in reader:
             textual_reviews.update({count: row[1]})
             count = count + 1
-    end = time.time()
-    print("storingreviewsindictionary took {}".format(end - start))
+
+
+    pickle_out = open("textual_reviews.pickle", "wb")
+    pickle.dump(textual_reviews, pickle_out)
+    pickle_out.close()
+
     return textual_reviews
 
 
@@ -78,10 +79,7 @@ def storingreviewsindictionary():
 
 '''
 
-
 def parsingDescriptionAndStoringInDictionary():
-    print("function : parsingDescriptionAndStoringInDictionary")
-    start = time.time()
     global textual_reviews
     dictionaryData={}
     documentCount = 0
@@ -90,7 +88,6 @@ def parsingDescriptionAndStoringInDictionary():
         stringValue=textual_reviews[key]
 
         # using RE to remove special characters in the string
-       # print(stringValue)
         regexFreeData = re.sub(r"[-()\"#/@;:<>{}`''+=~|.!?,''[]", "", stringValue)
 
         # Splitting the description column based on space
@@ -98,60 +95,67 @@ def parsingDescriptionAndStoringInDictionary():
 
         # removing the stopwords from the array
         stop_words = set(stopwords.words('english'))
-
-        #updatedValueArray = removeStopWordsFromDescription(valueArray)
         updatedValueArray = [w for w in valueArray if not w in stop_words]
 
         #Performing lematization
         dictionaryData[documentCount]=performLematization(updatedValueArray)
+
         documentCount=documentCount + 1
-        #print(documentCount,stringValue)
 
-
-    end = time.time()
-    print(end - start)
     return dictionaryData,documentCount
 
 
-'''
-    Description : index is the 
-'''
-
-
-@app.route('/')
+@application.route('/')
 def index():
     return render_template('index.html')
 
 
 '''
-    Description : This is the main routing function invoked by the container when /searchreviews
-
+    Description : This is the main routing function invoked by the container when /searchreviews is invoked.All the 
+                  related dictionary data is created by commenting line 138 -149 initially before web application is
+                  hosted on cloud platform. After the serialised pickle files are created , application will refer 
+                  them directly. After getting the first request application will no longer refer to pickle files,
+                  it will directly refer to the below mentioned global variables.All the below mentioned global variables
+                  are initialised when app receives http request for first time
+                  global idfdictionary_global :  Stores the mapping of term and  (frequency of term in a document / total terms in document) in dictionary. 
+                  global tfidfquerytermsdictionary_global : Stores the mapping of terms in query to their frequency.
+                  global documentindexedtfidfscoreofcorpus_global : Stores the mapping of terms to number of documents in which it is occurring in dictionary.
+                  global textual_reviews : Stores the mapping  of document index and text review data in dictionary.
+                
+    Input         : Search query received from the end user.
+    Output        : Returns the list of top 10 most similar documents.
 '''
 
-@app.route('/searchreviews')
-def searchtalks():
+@application.route('/searchreviews')
+def searchreviews():
     # Get the user query from the request
     searchquery =request.args.get('searchquery')
+    print(searchquery)
     global idfdictionary_global
-    global tfidfquerytermsdictionary_global
     global documentindexedtfidfscoreofcorpus_global
     global idfdictionary_global
     global textual_reviews
 
-    #print( len(tfidfquerytermsdictionary_global) , len(documentindexedtfidfscoreofcorpus_global) )
+    if len(documentindexedtfidfscoreofcorpus_global) == 0:
+        pickle_in = open("documentindexedtfidfscoreofcorpus.pickle", "rb")
+        documentindexedtfidfscoreofcorpus_global = pickle.load(pickle_in)
 
-    if len(tfidfquerytermsdictionary_global) > 0 and len(documentindexedtfidfscoreofcorpus_global) > 0:
-        print("in the if block    ")
+    if len(idfdictionary_global) == 0:
+        pickle_in = open("idfdictionary.pickle", "rb")
+        idfdictionary_global = pickle.load(pickle_in)
+
+    if len(textual_reviews) == 0:
+        pickle_in = open("textual_reviews.pickle", "rb")
+        textual_reviews = pickle.load(pickle_in)
+
+    if len(idfdictionary_global) > 0 and len(documentindexedtfidfscoreofcorpus_global) > 0:
+
 
         tfidfquerytermsdictionary = convertQueryIntoDictionary(searchquery, idfdictionary_global)
         cosineresult = calculateCosineSimilarityBetweebQueryandDocuments(tfidfquerytermsdictionary,
                                                                          documentindexedtfidfscoreofcorpus_global)
     else:
 
-        # Building the entire document indexing
-        #dbquery="select REVIEWS from AMAZONPHONEREV"
-
-        # Connect to IBM Cloud and fetch the Data
         storingreviewsindictionary()
 
         # Converting the fetched data into dictionary
@@ -171,30 +175,24 @@ def searchtalks():
                                                                          documentcorpusindexedtfidf)
     return render_template('tedresult.html',results=cosineresult)
 
-# def removeStopWordsFromDescription(arrayValues):
-#     stopwordslist={'very','a','description','ourselves','hers','between','yourself','but','again','there','about','once','during','out','very','having','with','they','own','an','be','some','for','do','its','yours','such','into','of','most','itself','other','off','is','s','am','or','who','as','from','him','each','the','themselves','until','below','are','we','these','your','his','through','don','nor','me','were','her','more','himself','this','down','should','our','their','while','above','both','up','to','ours','had','she','all','no','when','at','any','before','them','same','and','been','have','in','will','on','does','yourselves','then','that','because','what','over','why','so','can','did','not','now','under','he','you','herself','has','just','where','too','only','myself','which','those','i','after','few','whom','t','being','if','theirs','my','against','by','doing','it','how','further','was','here','than'}
-#   #  print(aamarrayValues)
-#     for value in arrayValues:
-#         if value in stopwordslist:
-#             arrayValues.pop(arrayValues.index(value))
-#             #print("removed stop word {}".format(value))
-#
-#     return arrayValues
-#
 
 def performLematization(wordtokens):
     wordinflectedlist=[]
     for word in wordtokens:
         wordinflectedlist.append(porter.stem(word))
-
-
     return wordinflectedlist
 
 
+
+'''
+    Description : creatingVectorRepresentationOfDocument creates a term frequency dictionary which is normalised.
+    Input       : dictionaryData containing terms and its frequency in a document.
+    Output      : documentTermFrequencyDictionary contains document index as key and normalised term frequency as value
+                  for each document.
+'''
+
+
 def creatingVectorRepresentationOfDocument(dictionaryData):
-    #converting the query in the dictionary format
-    print("function : creatingVectorRepresentationOfDocument")
-    start = time.time()
     documentTermFrequencyDictionary ={}
 
     for i in dictionaryData:
@@ -203,8 +201,6 @@ def creatingVectorRepresentationOfDocument(dictionaryData):
 
         for j in range(len(arrayData)):
             dict1[arrayData[j]] += 1
-        # this ds has the document number as D2543 : Value as a dictionary which has the termfrequency count of the terms
-
         normalisedTermFrequencyDictionary = {}
         for n in dict1:
 
@@ -212,21 +208,24 @@ def creatingVectorRepresentationOfDocument(dictionaryData):
 
         documentTermFrequencyDictionary.update({i: normalisedTermFrequencyDictionary})
 
-        #Normalising the term count with respect to the number of valid terms in each document
-
-   # print("documentTermFrequencyDictionary ----->{}".format(len(documentTermFrequencyDictionary)))
-    end= time.time()
-    print(end - start)
     return documentTermFrequencyDictionary
 
+'''
+    Description : calculatedocumentfrequency calculates the inverted document frequency for each term present in each document.
+                  Each row read from the csv file is returned as a list of strings .TextBlob is a Python (2 and 3) library for 
+                  processing textual data.It provides a simple API for diving into common natural language processing (NLP) tasks
+                  such as part-of-speech tagging,noun phrase extraction, sentiment analysis, classification, translation, and more.
+                  After applying the textblob to list of terms , it is checked for presence of stop words. Later the resultant list
+                  of words goes through stemming (to convert it into its root form). After this series of operation is completed
+                  i.e is foreach term of every document we compute the number of documents in which the terms occur. Then we calculate
+                  the idf score for each term.
+    Input         : Document count (100K in this case)
+    Output        : idfDictionary , containing terms and its IDF score. 
 
+'''
 
-
-# Assembling an inverted index.It is a data structure that maps tokens to the documents they appear in.
 def calculatedocumentfrequency(documentCount):
     idfDictionary = {}
-    print("function : calculatedocumentfrequency")
-    starttime = time.time()
     ps = PorterStemmer()
     stop_word = set(stopwords.words('english'))
     word_dict = defaultdict(set)
@@ -237,88 +236,109 @@ def calculatedocumentfrequency(documentCount):
             for insert in set(TextBlob(i[1].lower()).words) - stop_word:
                 word_dict[ps.stem(insert)].add(count)
     a = dict(word_dict.items())
-    print(len(a.keys()))
     idfDictionary = {key: (1 + math.log(documentCount / len(a[key]))) for key in a.keys()}
 
-    endtime = time.time()
+    pickle_out = open("idfDictionary.pickle", "wb")
+    pickle.dump(idfDictionary, pickle_out)
+    pickle_out.close()
 
-    print("Time taken to index the corpus is {}".format(endtime - starttime))
-    print("idfDictionary ----->{}".format(len(idfDictionary)))
     return idfDictionary
 
 
+'''
+    Description : computeTfIDFOfTheCorpus caclualtes the TF * IDF score of each term present in the document.
+                  This calculation repeats for entire set of documents.
+    
+    Input       : idfdictionary contains the inverted document frequency  for each term of a document.
+                  documentTermFrequencyDictionary: Contains the term frequency for each document
+            
+    Output      : documentindexedtfidfscoreofcorpus contained document number as index and value as
+'''
+
 def computeTfIDFOfTheCorpus(idfdictionary , documentTermFrequencyDictionary):
 
-    print("function : computeTfIDFOfTheCorpus")
-    start = time.time()
     documentindexedtfidfscoreofcorpus = {}
     docindex=0
-   # print(documentTermFrequencyDictionary)
 
 
     for docid in documentTermFrequencyDictionary.keys():
         tfidfscoreofcorpus = {}
-       # print("iterating for document {}".format(docid))
         documentDictionary = documentTermFrequencyDictionary[docid]
-       # print("document obtained is {}".format(documentDictionary))
         for terms in documentDictionary.keys():
             if terms in idfdictionary:
                 tfidfscoreofcorpus.update({terms : (documentDictionary[terms] * idfdictionary[terms])})
 
-       # print(docindex,tfidfscoreofcorpus)
         documentindexedtfidfscoreofcorpus.update({docindex: tfidfscoreofcorpus})
         docindex = docindex + 1
 
-   # print(documentindexedtfidfscoreofcorpus)
-    endtime=time.time()
-    print(endtime - start)
+    pickle_out = open("documentindexedtfidfscoreofcorpus.pickle", "wb")
+    pickle.dump(documentindexedtfidfscoreofcorpus, pickle_out)
+    pickle_out.close()
+
     return documentindexedtfidfscoreofcorpus
 
+
+'''
+    Description :convertQueryIntoDictionary manipulates the search query initiated by the end user. First a regular
+                 expression is used to filter out unwanted characters. Then the resultant string is tokenised and s
+                 stored in 'arrayQuery'. Then stop words are removed and lemmatisation is performed on the query tokens
+                 Then there is calculation for term frequency of the tokens present in the query . Then there is
+                 calculation for tf * idf score of the query terms
+    
+    Input       : idfdictionary ,Contains the inverted document frequency score for each term of a document.
+                  query ,User search query 
+    Output      : tfidfquerytermsdictionary, contains the TF * IDF score for each terms in the query
+'''
 
 
 def convertQueryIntoDictionary(query,idfdictionary):
     # Removing the special characters from the input user query
-
-    print("function : convertQueryIntoDictionary")
-    start = time.time()
-
     regexFreeData = re.sub(r"[-()\"#/@;:<>{}`+=~|.!?,]", "", query)
-   # print(regexFreeData.lower())
+
+    #print(regexFreeData.lower())
     arrayQuery = re.split("\s",regexFreeData.lower())
 
     stop_words = set(stopwords.words('english'))
+
     # updatedValueArray = removeStopWordsFromDescription(valueArray)
     updatedValueArray = [w for w in arrayQuery if not w in stop_words]
 
     filteredArrayQuery = performLematization(updatedValueArray)
     queryDictionary = dict.fromkeys(list(filteredArrayQuery), 0)
+
     for j in range(len(filteredArrayQuery)):
         queryDictionary[filteredArrayQuery[j]] += 1
 
     # queryDictionary contains terms and its frequency, now normalising the frequency.
     normalisedquerydictionary = {}
+
     for terms in queryDictionary.keys():
         freq = queryDictionary[terms] / len(queryDictionary)
         normalisedquerydictionary.update({terms:freq})
 
     #calculating the tf*idf of the query
-
     tfidfquerytermsdictionary={}
+
     for queryterms in normalisedquerydictionary.keys():
         if queryterms in idfdictionary.keys():
             tfidfquerytermsdictionary.update({queryterms:(normalisedquerydictionary[queryterms] * idfdictionary[queryterms])})
-   # print(tfidfquerytermsdictionary)
 
-   # print(normalisedquerydictionary)
-    end = time.time()
-    print(end - start)
     return  tfidfquerytermsdictionary
 
 
+
+'''
+
+    Description : calculateCosineSimilarityBetweebQueryandDocuments caclulates the vector dot products between tfidfquerytermsdictionary 
+                  and documentindexedtfidfscoreofcorpus. Top 10 documents are selected based on their cosine similarity value.
+    Input       : tfidfquerytermsdictionary , Dictionary of query terms and their TF * IDF score
+                  documentindexedtfidfscoreofcorpus , Dictionary having document index and value as idfdictionary for each document
+    Output      : List of 10 documents having the most high cosine similarity value .  
+
+'''
+
 def calculateCosineSimilarityBetweebQueryandDocuments(tfidfquerytermsdictionary , documentindexedtfidfscoreofcorpus):
 
-    print("function : cosinesimilarity")
-    start = time.time()
     cosineresultdictionary={}
     cosineList = []
     docindex = 0
@@ -329,13 +349,12 @@ def calculateCosineSimilarityBetweebQueryandDocuments(tfidfquerytermsdictionary 
 
         if docindex == len(documentindexedtfidfscoreofcorpus):
             break
-
         document = documentindexedtfidfscoreofcorpus[docindex]
 
 
         for queryterms in tfidfquerytermsdictionary.keys():
 
-            if queryterms in documentindexedtfidfscoreofcorpus[docindex]:
+            if queryterms in document:
                 cosineList.append([tfidfquerytermsdictionary[queryterms],document[queryterms]])
 
 
@@ -370,22 +389,19 @@ def calculateCosineSimilarityBetweebQueryandDocuments(tfidfquerytermsdictionary 
 
     list=[]
     returnresultcount = 0
-
     for k,v in result:
 
            r = textual_reviews[k]
 
            # read from textual_reviews
-           print("textual review {}".format(r))
+
            list.append(r)
            returnresultcount = returnresultcount+1
-           if returnresultcount == 3:
+           if returnresultcount == 10:
             break
     end = time.time()
-    print(end - start)
-    print(list)
     return list
 
-
 if __name__ == '__main__':
-    app.run()
+   application.run()
+
